@@ -11,6 +11,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml.Linq;
+using BCrypt.Net;
 
 namespace Regsitration
 {
@@ -20,69 +21,65 @@ namespace Regsitration
         {
             InitializeComponent();
         }
-        public string md5Hash(string pass)
-        {
-            using (MD5 md5 = MD5.Create())
-            {
-                byte[] data = md5.ComputeHash(Encoding.ASCII.GetBytes(pass));
-                StringBuilder stringBuilder = new StringBuilder();
-                foreach (byte b in data)
-                {
-                    stringBuilder.Append(b.ToString("x2"));
-                }
-                return stringBuilder.ToString();
-            }
-        }
-
-        public bool verifyPassword(string enteredPass, string hashedPass)
-        {
-            string hashed = md5Hash(enteredPass);
-            return hashed == hashedPass;
-        }
 
         private void handleLogin_Click(object sender, EventArgs e)
         {
             string server = "Data Source=localhost\\SQLEXPRESS;Initial Catalog=desktop;Integrated Security=True;";
             SqlConnection conn = new SqlConnection(server);
-            conn.Open();
-            if (email.Text == "" && password.Text == "")
+
+            try
             {
-                MessageBox.Show("Null Values Prohibited", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-            Regex regex = new Regex(@"[^@\s]+@[^@\s]+\.[^@\s]+$");
-            bool isValid = regex.IsMatch(email.Text);
-            if (!isValid)
-            {
-                MessageBox.Show("Enter Valid Email");
-                return;
-            }
-            string enteredPass = password.Text;
-            string storedHash = md5Hash(enteredPass);
-            bool isPasswordCorrect = verifyPassword(enteredPass, storedHash);
-            string query = "SELECT * FROM myTbl WHERE email = @email";
-            if(isPasswordCorrect)
-            {
-                SqlCommand cmd = new SqlCommand(query, conn);
-                cmd.Parameters.AddWithValue("@email", email.Text);
-                object result = cmd.ExecuteScalar();
-                if(result != null)
+                conn.Open();
+
+                if (string.IsNullOrWhiteSpace(email.Text) || string.IsNullOrWhiteSpace(password.Text))
                 {
-                    MessageBox.Show("Login Successfully", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    email.Text = "";
-                    password.Text = "";
-                
-                } else
-                {
-                    MessageBox.Show("Invalid Credentials", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("Email and Password cannot be empty.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
                 }
 
-            } else
-            {
-                MessageBox.Show("Invalid Credentials", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Regex regex = new Regex(@"[^@\s]+@[^@\s]+\.[^@\s]+$");
+                if (!regex.IsMatch(email.Text))
+                {
+                    MessageBox.Show("Enter a valid email.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
 
+                string query = "SELECT password FROM myTbl WHERE email = @Email";
+                SqlCommand cmd = new SqlCommand(query, conn);
+                cmd.Parameters.AddWithValue("@Email", email.Text);
+
+                object result = cmd.ExecuteScalar();
+                if (result != null)
+                {
+                    string storedHash = result.ToString();
+                    bool isPasswordCorrect = BCrypt.Net.BCrypt.Verify(password.Text, storedHash);
+
+                    if (isPasswordCorrect)
+                    {
+                        MessageBox.Show("Login Successful!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        email.Text = "";
+                        password.Text = "";
+                    }
+                    else
+                    {
+                        MessageBox.Show("Invalid Credentials.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("Invalid Credentials.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("An error occurred: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                conn.Close();
             }
         }
+
 
         private void redirectLogin_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {

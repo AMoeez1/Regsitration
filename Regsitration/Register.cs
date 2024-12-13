@@ -40,18 +40,16 @@ namespace Regsitration
 
         }
 
-        public string md5Hash(string pass)
+        public string bcrypt(string pass)
         {
-            using (MD5 md5 = MD5.Create()) {
-                byte[] data = md5.ComputeHash(Encoding.ASCII.GetBytes(pass));
-                StringBuilder stringBuilder = new StringBuilder();
-                foreach (byte b in data)
-                {
-                    stringBuilder.Append(b.ToString("x2"));
-                }
-                return stringBuilder.ToString();
-            }
+            return BCrypt.Net.BCrypt.HashPassword(pass);
         }
+
+        public bool validatePassword(string password, string hashedPass)
+        {
+            return BCrypt.Net.BCrypt.Verify(password, hashedPass);
+        }
+
         private void handleRegister_Click(object sender, EventArgs e)
         {
             string server = "Data Source=localhost\\SQLEXPRESS;Initial Catalog=desktop;Integrated Security=True;";
@@ -73,7 +71,7 @@ namespace Regsitration
             cmd.Parameters.AddWithValue("@name", name.Text);
             cmd.Parameters.AddWithValue("email", email.Text);
             string pass = password.Text;
-            string passText = md5Hash(pass);
+            string passText = bcrypt(pass);
             cmd.Parameters.AddWithValue("@password", passText);
 
             int rows = cmd.ExecuteNonQuery();
